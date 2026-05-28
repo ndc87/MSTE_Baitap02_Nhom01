@@ -16,7 +16,12 @@ const userSchema = new mongoose.Schema({
   email_verified_at: { type: Date },
   gender: { type: String, enum: ['male', 'female', 'other'] },
   dob: { type: Date },
-  coin_balance: { type: Number, default: 0 }
+  coin_balance: { type: Number, default: 0 },
+  role: {
+    type: String,
+    enum: ['customer', 'admin', 'vendor', 'shipper'],
+    default: 'customer'
+  }
 
 }, {
   timestamps: true

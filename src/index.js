@@ -2,6 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const morgan = require('morgan');
+const cookieParser = require('cookie-parser');
 const connectDB = require('./config/db');
 
 const requestId = require('./middleware/requestId');
@@ -23,7 +24,8 @@ const limiter = rateLimit({
 
 // Middleware
 app.use(express.json());
-app.use(cors());
+app.use(cookieParser());
+app.use(cors({ origin: true, credentials: true })); // Cho phép gửi cookie từ frontend
 app.use(morgan('dev'));
 app.use(requestId);
 app.use('/api', limiter);
@@ -31,7 +33,10 @@ app.use('/api', limiter);
 // Routes
 app.use('/api/auth', require('./routes/authRoutes'));
 app.use('/api/users', require('./routes/userRoutes'));
+app.use('/api/admin', require('./routes/adminRoutes'));
 app.use('/api/public', require('./routes/publicRoutes'));
+app.use('/api/cart', require('./routes/cartRoutes'));
+app.use('/api/orders', require('./routes/orderRoutes'));
 
 // Global Error Handler
 app.use((err, req, res, next) => {

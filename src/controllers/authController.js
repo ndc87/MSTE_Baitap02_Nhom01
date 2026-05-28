@@ -1,3 +1,4 @@
+const jwt = require('jsonwebtoken');
 const { OAuth2Client } = require('google-auth-library');
 const axios = require('axios');
 const User = require('../models/User');
@@ -15,6 +16,13 @@ exports.login = async (req, res) => {
   try {
     const { email, password } = req.body;
     const result = await authService.authenticate(email, password);
+
+    res.cookie('refreshToken', result.refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'Strict',
+      maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+    });
 
     return response.success(res, {
       message: 'Login successful',
@@ -65,6 +73,12 @@ exports.register = async (req, res, next) => {
       email,
       password,
       otp_code
+    });
+
+    res.cookie('refreshToken', result.refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
     });
 
     res.status(201).json({
@@ -298,6 +312,12 @@ exports.googleLogin = async (req, res) => {
       provider_id: sub
     });
 
+    res.cookie('refreshToken', result.refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+    });
+
     return response.success(res, {
       message: 'Google login successful',
       data: {
@@ -311,5 +331,38 @@ exports.googleLogin = async (req, res) => {
       statusCode: 401,
       message: 'Google authentication failed',
     });
+  }
+};
+
+/**
+ * @desc    Refresh Token
+ * @route   POST /api/auth/refresh-token
+ */
+exports.refreshToken = async (req, res) => {
+  try {
+    const refreshToken = req.cookies.refreshToken;
+    if (!refreshToken) {
+      return response.error(res, { statusCode: 401, message: 'Not authenticated' });
+    }
+
+    jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET || 'secret_refresh_key', async (err, decoded) => {
+      if (err) return response.error(res, { statusCode: 403, message: 'Invalid refresh token' });
+      
+      const user = await User.findById(decoded.id);
+      if (!user || user.status !== 'active') return response.error(res, { statusCode: 403, message: 'User not valid' });
+
+      const newAccessToken = jwt.sign(
+        { id: user._id, role: user.role },
+        process.env.JWT_SECRET,
+        { expiresIn: '15m' }
+      );
+
+      return response.success(res, {
+        message: 'Token refreshed',
+        data: { token: newAccessToken }
+      });
+    });
+  } catch (error) {
+    return response.error(res, { statusCode: 500, message: 'Internal server error' });
   }
 };

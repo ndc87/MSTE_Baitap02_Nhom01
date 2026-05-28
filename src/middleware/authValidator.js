@@ -31,6 +31,55 @@ const sendOTPRules = () => {
   ];
 };
 
+const loginRules = () => {
+  return [
+    body('email')
+      .notEmpty().withMessage('Email is required')
+      .isEmail().withMessage('Invalid email format'),
+    
+    body('password')
+      .notEmpty().withMessage('Password is required')
+      .isLength({ min: 8 }).withMessage('Password is incorrect')
+  ];
+};
+
+const forgotPasswordRules = () => {
+  return [
+    body('email')
+      .notEmpty().withMessage('Email is required')
+      .isEmail().withMessage('Invalid email format')
+  ];
+};
+
+const resetPasswordRules = () => {
+  return [
+    body('email')
+      .notEmpty().withMessage('Email is required')
+      .isEmail().withMessage('Invalid email format'),
+    
+    body('otp_code')
+      .notEmpty().withMessage('OTP code is required')
+      .isLength({ min: 6, max: 6 }).withMessage('OTP code must be exactly 6 digits'),
+    
+    body('new_password')
+      .notEmpty().withMessage('New password is required')
+      .isLength({ min: 8 }).withMessage('Password must be at least 8 characters')
+      .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/)
+      .withMessage('Password must include uppercase, lowercase, numbers, and special characters')
+  ];
+};
+
+const checkoutRules = () => {
+  return [
+    body('addressId')
+      .notEmpty().withMessage('Address ID is required'),
+    
+    body('paymentMethod')
+      .notEmpty().withMessage('Payment method is required')
+      .isIn(['cod']).withMessage('Invalid payment method')
+  ];
+};
+
 const profileUpdateRules = () => {
   return [
     body('fullName')
@@ -55,5 +104,9 @@ const profileUpdateRules = () => {
 module.exports = {
   registrationRules,
   sendOTPRules,
+  loginRules,
+  forgotPasswordRules,
+  resetPasswordRules,
+  checkoutRules,
   profileUpdateRules
 };

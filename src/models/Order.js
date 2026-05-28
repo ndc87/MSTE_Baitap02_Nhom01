@@ -7,9 +7,10 @@ const orderSchema = new mongoose.Schema({
   shop_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Shop', required: true },
   status: {
     type: String,
-    enum: ['pending', 'confirmed', 'shipped', 'delivered', 'canceled', 'disputed', 'refunded'],
+    enum: ['pending', 'confirmed', 'preparing', 'shipping', 'delivered', 'canceled', 'cancel_requested'],
     default: 'pending'
   },
+  created_at_timestamp: { type: Date, default: Date.now },
   subtotal_amount: { type: Number, required: true },
   shipping_fee: { type: Number, default: 0 },
   coupon_discount: { type: Number, default: 0 },
