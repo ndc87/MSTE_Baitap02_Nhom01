@@ -88,14 +88,14 @@ export const updateProfile = createAsyncThunk(
   'auth/updateProfile',
   async (userData, thunkAPI) => {
     try {
-      const token = sessionStorage.getItem('token');
+      const token = localStorage.getItem('accessToken');
       const config = {
         headers: {
           Authorization: `Bearer ${token}`,
         },
       };
       const response = await axios.put(`${API_URL}/profile`, userData, config);
-      sessionStorage.setItem('user', JSON.stringify(response.data.data.user));
+      localStorage.setItem('user', JSON.stringify(response.data.data.user));
       return response.data;
     } catch (error) {
       let message = error.response?.data?.message || error.message || error.toString();
@@ -108,7 +108,7 @@ export const uploadAvatar = createAsyncThunk(
   'auth/uploadAvatar',
   async (formData, thunkAPI) => {
     try {
-      const token = sessionStorage.getItem('token');
+      const token = localStorage.getItem('accessToken');
       const config = {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -116,7 +116,7 @@ export const uploadAvatar = createAsyncThunk(
         },
       };
       const response = await axios.post(`${API_URL}/profile/avatar`, formData, config);
-      sessionStorage.setItem('user', JSON.stringify(response.data.data.user));
+      localStorage.setItem('user', JSON.stringify(response.data.data.user));
       return response.data;
     } catch (error) {
       let message = error.response?.data?.message || error.message || error.toString();
@@ -159,8 +159,9 @@ const authSlice = createSlice({
       state.message = '';
     },
     logout: (state) => {
-      sessionStorage.removeItem('user');
-      sessionStorage.removeItem('token');
+      localStorage.removeItem('user');
+      localStorage.removeItem('accessToken');
+      localStorage.removeItem('refreshToken');
       state.user = null;
       state.isError = false;
       state.isSuccess = false;
@@ -191,8 +192,11 @@ const authSlice = createSlice({
         state.isSuccess = true;
         state.message = action.payload.message;
         state.user = action.payload.data.user;
-        sessionStorage.setItem('user', JSON.stringify(action.payload.data.user));
-        sessionStorage.setItem('token', action.payload.data.token);
+        localStorage.setItem('user', JSON.stringify(action.payload.data.user));
+        localStorage.setItem('accessToken', action.payload.data.token);
+        if (action.payload.data.refreshToken) {
+          localStorage.setItem('refreshToken', action.payload.data.refreshToken);
+        }
       })
       .addCase(registerUser.rejected, (state, action) => {
         state.isLoading = false;
@@ -208,8 +212,11 @@ const authSlice = createSlice({
         state.isSuccess = true;
         state.message = action.payload.message;
         state.user = action.payload.data.user;
-        sessionStorage.setItem('user', JSON.stringify(action.payload.data.user));
-        sessionStorage.setItem('token', action.payload.data.token);
+        localStorage.setItem('user', JSON.stringify(action.payload.data.user));
+        localStorage.setItem('accessToken', action.payload.data.token);
+        if (action.payload.data.refreshToken) {
+          localStorage.setItem('refreshToken', action.payload.data.refreshToken);
+        }
       })
       .addCase(login.rejected, (state, action) => {
         state.isLoading = false;

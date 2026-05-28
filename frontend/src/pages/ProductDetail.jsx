@@ -2,7 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { toast } from 'react-hot-toast';
+import axiosInstance from '../services/api';
 import Header from '../components/Header';
+import { Swiper, SwiperSlide } from 'swiper/react';
+import { Navigation, Pagination } from 'swiper/modules';
+import 'swiper/css';
+import 'swiper/css/navigation';
+import 'swiper/css/pagination';
 
 const ProductDetail = () => {
   const { slug } = useParams();
@@ -48,8 +54,25 @@ const ProductDetail = () => {
     if (type === 'dec' && quantity > 1) setQuantity(q => q - 1);
   };
 
-  const handleAddToCart = () => {
-    toast.success('Added to cart successfully!');
+  const handleAddToCart = async () => {
+    try {
+      const token = localStorage.getItem('accessToken');
+      if (!token) {
+        toast.error('Vui lòng đăng nhập để thêm vào giỏ hàng');
+        navigate('/login');
+        return;
+      }
+      
+      await axiosInstance.post('/cart/add', 
+        { productId: product.id || product._id, quantity }
+      );
+      
+      window.dispatchEvent(new Event('cartUpdated'));
+      toast.success('Đã thêm vào giỏ hàng!');
+    } catch (error) {
+      console.error('Add to cart error:', error);
+      toast.error(error.response?.data?.message || 'Không thể thêm vào giỏ hàng');
+    }
   };
 
   return (
@@ -72,27 +95,25 @@ const ProductDetail = () => {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-12">
           {/* Left: Gallery */}
           <div className="lg:col-span-5 space-y-4">
-            <div className="relative aspect-square bg-white rounded-3xl overflow-hidden border border-[#c3c6d7] group">
-              <img src={selectedImage || 'https://via.placeholder.com/800'} alt={product.name} className="w-full h-full object-cover transition-transform duration-500 hover:scale-110 cursor-zoom-in" />
-              <div className="absolute top-6 left-6 flex flex-col gap-2">
+            <Swiper 
+              modules={[Navigation, Pagination]} 
+              navigation 
+              pagination={{ clickable: true }} 
+              className="rounded-3xl border border-[#c3c6d7] aspect-square"
+            >
+              {media?.map((m, idx) => (
+                <SwiperSlide key={idx}>
+                  <img src={m.mediaUrl} alt={product.name} className="w-full h-full object-cover" />
+                </SwiperSlide>
+              ))}
+              <div className="absolute top-6 left-6 flex flex-col gap-2 z-10">
                 {stock > 0 ? (
                    <span className="bg-[#004ac6] text-white text-[10px] font-bold px-3 py-1 rounded-full shadow-lg uppercase tracking-widest">In Stock</span>
                 ) : (
                    <span className="bg-red-500 text-white text-[10px] font-bold px-3 py-1 rounded-full shadow-lg uppercase tracking-widest">Out of Stock</span>
                 )}
               </div>
-            </div>
-            <div className="grid grid-cols-4 gap-4">
-              {media?.map((m, idx) => (
-                <button 
-                  key={idx} 
-                  onClick={() => setSelectedImage(m.mediaUrl)}
-                  className={`aspect-square rounded-2xl overflow-hidden border-2 transition-all ${selectedImage === m.mediaUrl ? 'border-[#004ac6] opacity-100 scale-105 shadow-md' : 'border-[#c3c6d7] opacity-60 hover:opacity-100 hover:border-[#004ac6]'}`}
-                >
-                  <img src={m.mediaUrl} className="w-full h-full object-cover" />
-                </button>
-              ))}
-            </div>
+            </Swiper>
           </div>
 
           {/* Right: Info */}
@@ -114,10 +135,10 @@ const ProductDetail = () => {
 
             <div className="bg-[#eaedff] p-6 rounded-2xl space-y-3">
               <div className="flex items-baseline flex-wrap gap-x-4 gap-y-2">
-                <p className="text-4xl text-[#004ac6] font-extrabold">{product.sellingPrice.toLocaleString()}₫</p>
+                <p className="text-4xl text-[#004ac6] font-extrabold">{(product.sellingPrice || 0).toLocaleString()}₫</p>
                 {product.mrpPrice > product.sellingPrice && (
                   <div className="flex items-center gap-3">
-                    <p className="text-sm text-[#434655] line-through">{product.mrpPrice.toLocaleString()}₫</p>
+                    <p className="text-sm text-[#434655] line-through">{(product.mrpPrice || 0).toLocaleString()}₫</p>
                     <span className="bg-red-500 text-white text-[10px] font-bold px-2 py-1 rounded-full">
                       -{Math.round((1 - product.sellingPrice / product.mrpPrice) * 100)}%
                     </span>
@@ -477,7 +498,7 @@ const ProductDetail = () => {
                                 <p className="text-[10px] font-bold text-[#434655] uppercase tracking-widest mb-1">{p.category?.name || 'Category'}</p>
                                 <h4 className="font-bold text-sm mb-2 line-clamp-2 min-h-[2.5rem] group-hover:text-[#004ac6] transition-colors">{p.name}</h4>
                                 <div className="mt-auto flex items-center justify-between">
-                                    <p className="text-[#004ac6] font-extrabold">{p.sellingPrice.toLocaleString()}₫</p>
+                                    <p className="text-[#004ac6] font-extrabold">{(p.sellingPrice || 0).toLocaleString()}₫</p>
                                     <button className="w-8 h-8 rounded-full bg-[#004ac6]/10 text-[#004ac6] flex items-center justify-center hover:bg-[#004ac6] hover:text-white transition-all">
                                         <span className="material-symbols-outlined text-sm">add_shopping_cart</span>
                                     </button>
