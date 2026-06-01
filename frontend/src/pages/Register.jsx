@@ -48,12 +48,23 @@ const Register = () => {
 
   const onSubmit = (e) => {
     e.preventDefault();
+
+    // BUG FIX #4: Validate password fields BEFORE triggering the OTP API call.
+    // Users must know about password errors immediately, not after entering an OTP.
+    if (password.length < 8) {
+      toast.dismiss();
+      toast.error('Mật khẩu phải có ít nhất 8 ký tự');
+      return;
+    }
+
     if (password !== confirmPassword) {
       toast.dismiss();
-      toast.error('Passwords do not match');
-    } else {
-      dispatch(sendOTP(email.trim()));
+      toast.error('Mật khẩu xác nhận không khớp');
+      return;
     }
+
+    // All validations passed — safe to request OTP
+    dispatch(sendOTP(email.trim()));
   };
 
   return (

@@ -128,6 +128,24 @@ const seedFashionData = async () => {
       { full_name: 'Le Minh Hang', email: 'hang@gmail.com', password: hashedPassword, status: 'active', coin_balance: 2000 }
     ]);
 
+    const hashUser123 = await bcrypt.hash('User@123', 10);
+    const hashAdmin123 = await bcrypt.hash('Admin@123', 10);
+
+    const testAdmin = await User.create({
+      full_name: 'Test Admin',
+      email: 'admin@example.com',
+      password: hashAdmin123,
+      status: 'active',
+      role: 'admin'
+    });
+
+    const testCustomers = await User.insertMany([
+      { full_name: 'Test User', email: 'user@example.com', password: hashUser123, status: 'active' },
+      { full_name: 'Test User FP', email: 'testuser@example.com', password: hashUser123, status: 'active' },
+      { full_name: 'Inactive User', email: 'inactive@example.com', password: hashUser123, status: 'inactive' },
+      { full_name: 'Locked User', email: 'locked@example.com', password: hashUser123, status: 'locked' }
+    ]);
+
     await UserRole.insertMany([
       { user_id: admin._id, role_id: adminRole._id },
       { user_id: manager._id, role_id: managerRole._id },
@@ -135,7 +153,12 @@ const seedFashionData = async () => {
       { user_id: sellers[1]._id, role_id: sellerRole._id },
       { user_id: sellers[2]._id, role_id: sellerRole._id },
       { user_id: customers[0]._id, role_id: customerRole._id },
-      { user_id: customers[1]._id, role_id: customerRole._id }
+      { user_id: customers[1]._id, role_id: customerRole._id },
+      { user_id: testAdmin._id, role_id: adminRole._id },
+      { user_id: testCustomers[0]._id, role_id: customerRole._id },
+      { user_id: testCustomers[1]._id, role_id: customerRole._id },
+      { user_id: testCustomers[2]._id, role_id: customerRole._id },
+      { user_id: testCustomers[3]._id, role_id: customerRole._id }
     ]);
 
     console.log('📍 Seeding Addresses...');

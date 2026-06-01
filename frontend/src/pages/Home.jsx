@@ -44,6 +44,31 @@ const Home = () => {
 
   const { banners, categories, flashDeals, newArrivals, bestSellers, campaign } = data || {};
 
+  const handleAddToCart = async (e, productId) => {
+    e.preventDefault();
+    e.stopPropagation();
+    try {
+      // BUG FIX #3: Login stores token in localStorage as 'accessToken',
+      // not sessionStorage as 'token'. Align to the correct key.
+      const token = localStorage.getItem('accessToken');
+      if (!token) {
+        toast.error('Vui lòng đăng nhập để thêm vào giỏ hàng');
+        navigate('/login');
+        return;
+      }
+      
+      await axios.post('http://localhost:5000/api/cart/add', 
+        { productId, quantity: 1 }, 
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      
+      window.dispatchEvent(new Event('cartUpdated'));
+      toast.success('Đã thêm vào giỏ hàng!');
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Không thể thêm vào giỏ hàng');
+    }
+  };
+
   return (
     <div className="text-[#131b2e] min-h-screen bg-[#faf8ff] font-['Manrope']">
       <Header />
@@ -84,30 +109,6 @@ const Home = () => {
                 <Link to="#" className="bg-white/10 backdrop-blur-md text-white border border-white/20 px-8 py-3 rounded-full font-bold hover:bg-white/20 transition-colors">View Lookbook</Link>
               </div>
             </div>
-          </div>
-        </section>
-
-        {/* Shop by Discipline */}
-        <section className="space-y-6">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-bold tracking-tight">Shop by Discipline</h2>
-            <div className="h-[1px] flex-grow mx-8 bg-[#c3c6d7]/30 hidden md:block"></div>
-            <span className="text-xs font-bold text-[#434655] uppercase tracking-widest">Faculty Collections</span>
-          </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-            {[
-              { icon: 'precision_manufacturing', label: 'Engineering' },
-              { icon: 'architecture', label: 'Design & Art' },
-              { icon: 'payments', label: 'Business' },
-              { icon: 'biotech', label: 'Sciences' },
-              { icon: 'history_edu', label: 'Humanities' },
-              { icon: 'balance', label: 'Law & Policy' },
-            ].map((d, i) => (
-              <button key={i} className="group p-4 bg-white border border-[#c3c6d7] rounded-2xl hover:border-[#004ac6] transition-all text-center">
-                <span className="material-symbols-outlined text-3xl mb-2 text-[#434655] group-hover:text-[#004ac6] transition-colors">{d.icon}</span>
-                <p className="text-xs font-bold uppercase tracking-wide">{d.label}</p>
-              </button>
-            ))}
           </div>
         </section>
 
@@ -158,8 +159,8 @@ const Home = () => {
                   <div className="mt-auto space-y-3">
                     <div className="space-y-1">
                       <div className="flex items-baseline gap-2">
-                        <span className="font-bold text-[#004ac6]">{product.sellingPrice.toLocaleString()}₫</span>
-                        <span className="text-xs text-[#434655] line-through">{product.mrpPrice.toLocaleString()}₫</span>
+                        <span className="font-bold text-[#004ac6]">{(product.sellingPrice || 0).toLocaleString()}₫</span>
+                        <span className="text-xs text-[#434655] line-through">{(product.mrpPrice || 0).toLocaleString()}₫</span>
                       </div>
                       <div className="space-y-1">
                         <div className="flex justify-between text-[10px] font-bold text-[#434655] uppercase">
@@ -170,7 +171,10 @@ const Home = () => {
                         </div>
                       </div>
                     </div>
-                    <button className="w-full flex items-center justify-center gap-2 py-2.5 bg-[#004ac6] text-white rounded-xl font-bold text-xs hover:bg-blue-700 transition-all active:scale-95 shadow-sm">
+                    <button 
+                      onClick={(e) => handleAddToCart(e, product.id || product._id)}
+                      className="w-full flex items-center justify-center gap-2 py-2.5 bg-[#004ac6] text-white rounded-xl font-bold text-xs hover:bg-blue-700 transition-all active:scale-95 shadow-sm"
+                    >
                       <span className="material-symbols-outlined text-sm">shopping_cart</span>
                       Add to Cart
                     </button>
@@ -202,13 +206,16 @@ const Home = () => {
                   <Link to={`/product/${product.slug}`} className="font-bold text-sm line-clamp-2 leading-snug hover:text-[#004ac6] transition-colors block mb-2 min-h-[2.5rem]">{product.name}</Link>
                   <div className="mt-auto space-y-3">
                     <div className="flex flex-col gap-1">
-                      <span className="font-bold text-[#004ac6]">{product.sellingPrice.toLocaleString()}₫</span>
+                      <span className="font-bold text-[#004ac6]">{(product.sellingPrice || 0).toLocaleString()}₫</span>
                       <div className="flex items-center gap-1">
                         <span className="text-[10px] text-[#434655]">Lifestyle</span>
                         <span className="text-[10px] text-[#434655] ml-auto flex items-center gap-0.5"><span className="material-symbols-outlined text-[12px] fill-1 text-amber-500">star</span> {product.averageRating || 5.0}</span>
                       </div>
                     </div>
-                    <button className="w-full flex items-center justify-center gap-2 py-2 bg-[#004ac6]/10 text-[#004ac6] rounded-xl font-bold text-xs hover:bg-[#004ac6] hover:text-white transition-all active:scale-95">
+                    <button 
+                      onClick={(e) => handleAddToCart(e, product.id || product._id)}
+                      className="w-full flex items-center justify-center gap-2 py-2 bg-[#004ac6]/10 text-[#004ac6] rounded-xl font-bold text-xs hover:bg-[#004ac6] hover:text-white transition-all active:scale-95"
+                    >
                       <span className="material-symbols-outlined text-sm">shopping_cart</span>
                       Add to Cart
                     </button>

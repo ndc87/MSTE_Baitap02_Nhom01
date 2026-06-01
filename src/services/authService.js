@@ -119,7 +119,13 @@ const authenticate = async (email, password) => {
   const token = jwt.sign(
     { id: user._id, role: user.role },
     process.env.JWT_SECRET,
-    { expiresIn: process.env.JWT_EXPIRE || '7d' }
+    { expiresIn: '15m' } // Access token
+  );
+
+  const refreshToken = jwt.sign(
+    { id: user._id },
+    process.env.JWT_REFRESH_SECRET || 'secret_refresh_key',
+    { expiresIn: '7d' } // Refresh token
   );
 
   const redirectUrl = user.role === 'admin' ? '/admin/profile' : '/user/profile';
@@ -140,7 +146,7 @@ const authenticate = async (email, password) => {
     updatedAt: userObj.updatedAt
   };
 
-  return { token, user: userData, redirectUrl };
+  return { token, refreshToken, user: userData, redirectUrl };
 };
 
 /**
@@ -207,15 +213,8 @@ const registerUser = async (userData) => {
   }).sort({ createdAt: -1 });
 
   if (!otpRecord) {
-    console.log(`[Register] OTP not found or already verified for ${email}`);
-    const error = new Error('Invalid OTP code or already verified');
-    error.statusCode = 422;
-    throw error;
-  }
-
-  if (new Date() > otpRecord.expired_at) {
-    console.log(`[Register] OTP expired for ${email}. Expired at: ${otpRecord.expired_at}`);
-    const error = new Error('OTP code has expired');
+    console.log(`[Register] OTP not found, expired, or already verified for ${email}`);
+    const error = new Error('Invalid OTP code, expired or already verified');
     error.statusCode = 422;
     throw error;
   }
@@ -252,10 +251,16 @@ const registerUser = async (userData) => {
   const token = jwt.sign(
     { id: user._id, role: user.role },
     process.env.JWT_SECRET,
-    { expiresIn: process.env.JWT_EXPIRE || '7d' }
+    { expiresIn: '15m' }
   );
 
-  return { user, token };
+  const refreshToken = jwt.sign(
+    { id: user._id },
+    process.env.JWT_REFRESH_SECRET || 'secret_refresh_key',
+    { expiresIn: '7d' }
+  );
+
+  return { user, token, refreshToken };
 };
 
 /**
@@ -288,7 +293,13 @@ const socialAuthenticate = async (userData) => {
   const token = jwt.sign(
     { id: user._id, role: user.role },
     process.env.JWT_SECRET,
-    { expiresIn: process.env.JWT_EXPIRE || '7d' }
+    { expiresIn: '15m' }
+  );
+
+  const refreshToken = jwt.sign(
+    { id: user._id },
+    process.env.JWT_REFRESH_SECRET || 'secret_refresh_key',
+    { expiresIn: '7d' }
   );
 
   const userObj = user.toObject();
@@ -305,7 +316,7 @@ const socialAuthenticate = async (userData) => {
     createdAt: userObj.createdAt,
   };
 
-  return { token, user: returnUserData };
+  return { token, refreshToken, user: returnUserData };
 };
 
 module.exports = {

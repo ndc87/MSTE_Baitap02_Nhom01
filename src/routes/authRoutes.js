@@ -60,4 +60,29 @@ router.post('/profile/avatar', protect, upload.single('avatar'), authController.
 // Social Login
 router.post('/google', authController.googleLogin);
 
+// DEV ONLY - Get latest OTP for testing (blocked in production)
+router.get('/dev/get-otp', async (req, res) => {
+  if (process.env.NODE_ENV === 'production') {
+    return res.status(403).json({ success: false, message: 'Not available in production' });
+  }
+  try {
+    const { email } = req.query;
+    if (!email) {
+      return res.status(400).json({ success: false, message: 'email query parameter is required' });
+    }
+    const OTP = require('../models/OTP');
+    const otpRecord = await OTP.findOne(
+      { email, otp_type: 'reset_password', is_verified: false },
+      null,
+      { sort: { createdAt: -1 } }
+    );
+    if (!otpRecord) {
+      return res.status(404).json({ success: false, message: 'No OTP found for this email' });
+    }
+    return res.json({ success: true, otp: otpRecord.otp_code, expired_at: otpRecord.expired_at });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 module.exports = router;

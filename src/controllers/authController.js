@@ -57,9 +57,17 @@ exports.sendOTP = async (req, res, next) => {
       timestamp: Math.floor(Date.now() / 1000)
     });
   } catch (error) {
-    next(error);
+    const statusCode = error.statusCode || 500;
+    return res.status(statusCode).json({
+      success: false,
+      code: statusCode,
+      message: error.message || 'Internal Server Error',
+      data: null,
+      timestamp: Math.floor(Date.now() / 1000)
+    });
   }
 };
+
 
 /**
  * @desc    Register new user
@@ -146,28 +154,12 @@ exports.forgotPassword = async (req, res) => {
  */
 exports.resetPassword = async (req, res) => {
   try {
-    const { email, otp, newPassword } = req.body;
+    const { email, otp_code, new_password } = req.body;
 
-    const errors = {};
-    if (!email) errors.email = 'Email is required';
-    if (!otp) errors.otp = 'OTP is required';
-    if (!newPassword) errors.newPassword = 'New Password is required';
-    
-    if (Object.keys(errors).length > 0) {
-      return responseHelper.errorResponse(res, 'Validation failed', 422, errors);
-    }
-
-    const passwordRegex = /^(?=.*[0-9])(?=.*[!@#$%^&*])[a-zA-Z0-9!@#$%^&*]{8,}$/;
-    if (!passwordRegex.test(newPassword)) {
-      return responseHelper.errorResponse(res, 'Password must be at least 8 characters, including numbers and special characters', 422, {
-        newPassword: 'Password does not meet security requirements'
-      });
-    }
-
-    const isValid = await authService.verifyOTP(email, otp, 'reset_password');
+    const isValid = await authService.verifyOTP(email, otp_code, 'reset_password');
     if (!isValid) {
       return responseHelper.errorResponse(res, 'Invalid or expired OTP code', 422, {
-        otp: 'Invalid or expired OTP'
+        otp_code: 'Invalid or expired OTP'
       });
     }
 
@@ -176,7 +168,7 @@ exports.resetPassword = async (req, res) => {
       return responseHelper.errorResponse(res, 'User not found', 404);
     }
 
-    user.password = await authService.hashPassword(newPassword);
+    user.password = await authService.hashPassword(new_password);
     await user.save();
 
     return responseHelper.successResponse(res, 'Password has been updated successfully');

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
 import toast from 'react-hot-toast';
@@ -107,6 +107,32 @@ const Search = () => {
     const newParams = new URLSearchParams(searchParams);
     newParams.set('page', newPage);
     setSearchParams(newParams);
+  };
+
+  const navigate = useNavigate();
+
+  const handleAddToCart = async (e, productId) => {
+    e.preventDefault();
+    e.stopPropagation();
+    try {
+      // BUG FIX #3: use localStorage 'accessToken' — this is where the login flow stores the token
+      const token = localStorage.getItem('accessToken');
+      if (!token) {
+        toast.error('Vui lòng đăng nhập để thêm vào giỏ hàng');
+        navigate('/login');
+        return;
+      }
+      
+      await axios.post('http://localhost:5000/api/cart/add', 
+        { productId, quantity: 1 }, 
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      
+      window.dispatchEvent(new Event('cartUpdated'));
+      toast.success('Đã thêm vào giỏ hàng!');
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Không thể thêm vào giỏ hàng');
+    }
   };
 
   const parentCategories = categories.filter(c => !c.parentId);
@@ -309,8 +335,11 @@ const Search = () => {
                         <span className="text-xs text-[#434655]">(128 reviews)</span>
                       </div>
                       <div className="flex items-center justify-between pt-4 border-t border-[#c3c6d7]/30 mt-auto">
-                        <span className="font-bold text-xl text-[#004ac6]">{product.sellingPrice.toLocaleString()}₫</span>
-                        <button className="w-10 h-10 bg-[#eaedff] text-[#004ac6] rounded-xl flex items-center justify-center hover:bg-[#004ac6] hover:text-white transition-all">
+                        <span className="font-bold text-xl text-[#004ac6]">{(product.sellingPrice || 0).toLocaleString()}₫</span>
+                        <button 
+                          onClick={(e) => handleAddToCart(e, product.id || product._id)}
+                          className="w-10 h-10 bg-[#eaedff] text-[#004ac6] rounded-xl flex items-center justify-center hover:bg-[#004ac6] hover:text-white transition-all"
+                        >
                           <span className="material-symbols-outlined text-[20px]">add_shopping_cart</span>
                         </button>
                       </div>

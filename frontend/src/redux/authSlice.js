@@ -131,8 +131,12 @@ export const googleLogin = createAsyncThunk(
     try {
       const response = await axios.post(`${API_URL}/google`, { tokenId });
       if (response.data.data) {
-        sessionStorage.setItem('user', JSON.stringify(response.data.data.user));
-        sessionStorage.setItem('token', response.data.data.token);
+        // Use localStorage to stay consistent with email/password login flow
+        localStorage.setItem('user', JSON.stringify(response.data.data.user));
+        localStorage.setItem('accessToken', response.data.data.token);
+        if (response.data.data.refreshToken) {
+          localStorage.setItem('refreshToken', response.data.data.refreshToken);
+        }
       }
       return response.data;
     } catch (error) {
@@ -145,7 +149,9 @@ export const googleLogin = createAsyncThunk(
 const authSlice = createSlice({
   name: 'auth',
   initialState: {
-    user: JSON.parse(sessionStorage.getItem('user')) || null,
+    // BUG FIX #3 (root cause): login/register store to localStorage,
+    // but initial state was reading from sessionStorage — user was always null on reload.
+    user: JSON.parse(localStorage.getItem('user')) || null,
     isError: false,
     isSuccess: false,
     isLoading: false,

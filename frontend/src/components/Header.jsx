@@ -1,12 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useSelector } from 'react-redux';
+import axiosInstance from '../services/api';
 
 const Header = () => {
   const { user } = useSelector((state) => state.auth);
   const [searchTerm, setSearchTerm] = useState('');
   const navigate = useNavigate();
   const location = useLocation();
+
+  const [cartCount, setCartCount] = useState(0);
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -17,6 +20,32 @@ const Header = () => {
       setSearchTerm('');
     }
   }, [location.search, location.pathname]);
+
+  const fetchCartCount = async () => {
+    if (!user) return;
+    try {
+      // axiosInstance already attaches 'accessToken' from localStorage via its interceptor
+      const res = await axiosInstance.get('/cart');
+      if (res.data.success) {
+        const count = res.data.data.reduce((total, item) => total + (item.quantity || 0), 0);
+        setCartCount(count);
+      }
+    } catch (err) {
+      console.error('Failed to fetch cart count', err);
+    }
+  };
+
+  useEffect(() => {
+    fetchCartCount();
+    
+    // Listen for custom event when cart is updated
+    const handleCartUpdate = () => {
+      fetchCartCount();
+    };
+    
+    window.addEventListener('cartUpdated', handleCartUpdate);
+    return () => window.removeEventListener('cartUpdated', handleCartUpdate);
+  }, [user]);
 
   const handleSearch = (e) => {
     if (e.key === 'Enter' && searchTerm.trim()) {
@@ -62,17 +91,22 @@ const Header = () => {
           </button>
           <Link to="/cart" className="p-2 hover:bg-[#f7f9ff] rounded-full transition-all duration-200 relative text-[#434655]">
             <span className="material-symbols-outlined">shopping_cart</span>
-            <span className="absolute top-1 -right-1 w-4 h-4 bg-[#004ac6] text-[10px] text-white flex items-center justify-center rounded-full font-bold">3</span>
+            {cartCount > 0 && (
+              <span className="absolute top-1 -right-1 w-4 h-4 bg-[#004ac6] text-[10px] text-white flex items-center justify-center rounded-full font-bold">{cartCount}</span>
+            )}
           </Link>
           <button className="p-2 hover:bg-[#f7f9ff] rounded-full transition-all duration-200 text-[#434655] relative">
             <span className="material-symbols-outlined">notifications</span>
             <span className="absolute top-2 right-2 w-2 h-2 bg-[#b3261e] rounded-full"></span>
           </button>
           {user ? (
-            <Link to="/user/profile" className="flex items-center gap-3 p-1 pr-4 hover:bg-[#f7f9ff] rounded-full transition-all duration-200 border border-[#e2e4f0]">
-              <img src={user.avatarUrl || `https://ui-avatars.com/api/?name=${user.fullName}&background=random`} alt="Avatar" className="w-8 h-8 rounded-full object-cover" />
-              <span className="text-sm font-bold text-[#131b2e] hidden lg:block tracking-tight">{user.fullName}</span>
-            </Link>
+            <div className="flex items-center gap-4">
+              <Link to="/orders" className="text-sm font-bold text-[#434655] hover:text-[#004ac6]">My Orders</Link>
+              <Link to="/user/profile" className="flex items-center gap-3 p-1 pr-4 hover:bg-[#f7f9ff] rounded-full transition-all duration-200 border border-[#e2e4f0]">
+                <img src={user.avatarUrl || `https://ui-avatars.com/api/?name=${user.fullName}&background=random`} alt="Avatar" className="w-8 h-8 rounded-full object-cover" />
+                <span className="text-sm font-bold text-[#131b2e] hidden lg:block tracking-tight">{user.fullName}</span>
+              </Link>
+            </div>
           ) : (
             <div className="flex items-center gap-3">
               <Link to="/login" className="text-sm font-bold text-[#131b2e]">Login</Link>

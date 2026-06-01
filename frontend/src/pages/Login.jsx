@@ -34,7 +34,11 @@ const Login = () => {
     if (isSuccess && user) {
       toast.dismiss();
       toast.success('Login successful!');
-      navigate('/');
+      if (user.role === 'admin') {
+        navigate('/admin');
+      } else {
+        navigate('/');
+      }
       dispatch(reset());
     }
   }, [user, isError, isSuccess, message, navigate, dispatch]);

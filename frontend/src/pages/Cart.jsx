@@ -54,7 +54,12 @@ const Cart = () => {
 
   if (loading) return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
 
-  const total = items.reduce((acc, item) => acc + (item.productId?.sellingPrice || 0) * item.quantity, 0);
+  // The API returns items with shape: { id, product_id, product: {...}, quantity }
+  // The product object uses snake_case from MongoDB: selling_price, mrp_price, media[]
+  const total = items.reduce((acc, item) => {
+    const price = Number(item.product?.sellingPrice) || 0;
+    return acc + price * item.quantity;
+  }, 0);
 
   return (
     <div className="bg-[#faf8ff] text-[#131b2e] min-h-screen font-['Manrope']">
@@ -71,10 +76,21 @@ const Cart = () => {
             <div className="lg:col-span-2 space-y-4">
               {items.map(item => (
                 <div key={item.id} className="bg-white p-4 rounded-2xl border border-[#c3c6d7] flex items-center gap-4">
-                  <img src={item.productId?.media?.[0] || 'https://via.placeholder.com/100'} className="w-24 h-24 object-cover rounded-xl" />
+                  <img
+                    src={item.product?.media?.[0] || 'https://via.placeholder.com/100'}
+                    alt={item.product?.name || 'Product'}
+                    className="w-24 h-24 object-cover rounded-xl"
+                  />
                   <div className="flex-grow">
-                    <h3 className="font-bold">{item.productId?.name || 'Product'}</h3>
-                    <p className="text-[#004ac6] font-extrabold">{(item.productId?.sellingPrice || 0).toLocaleString()}₫</p>
+                    <h3 className="font-bold">{item.product?.name || 'Product'}</h3>
+                    <p className="text-[#004ac6] font-extrabold">
+                      {(Number(item.product?.sellingPrice) || 0).toLocaleString()}₫
+                    </p>
+                    {item.product?.mrpPrice > item.product?.sellingPrice && (
+                      <p className="text-xs text-[#434655] line-through">
+                        {(Number(item.product?.mrpPrice) || 0).toLocaleString()}₫
+                      </p>
+                    )}
                   </div>
                   <div className="flex items-center gap-3">
                     <button onClick={() => handleUpdate(item.id, item.quantity - 1)} className="w-8 h-8 flex items-center justify-center bg-[#eaedff] rounded-lg">-</button>

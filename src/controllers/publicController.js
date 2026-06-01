@@ -42,15 +42,51 @@ exports.getHomepageData = async (req, res, next) => {
       .sort({ average_rating: -1 })
       .limit(10);
 
-    // Helper to attach media to products
+    // Helper to attach media and normalize price fields for products
+    const normalizeProduct = async (p) => {
+      const obj = p.toObject();
+
+      // --- Fix prices: DB uses base_price, model expects selling_price/mrp_price ---
+      if (!obj.selling_price && obj.base_price) {
+        obj.selling_price = obj.base_price;
+      }
+      if (!obj.mrp_price) {
+        obj.mrp_price = obj.selling_price || obj.base_price || 0;
+      }
+
+      // --- Fix media: DB embeds media[] inside product, fallback to ProductMedia collection ---
+      let mediaUrls = [];
+      if (Array.isArray(obj.media) && obj.media.length > 0) {
+        // Embedded media array in the product document
+        if (typeof obj.media[0] === 'string') {
+          mediaUrls = obj.media;
+        } else {
+          mediaUrls = obj.media
+            .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
+            .map(m => m.media_url);
+        }
+      } else {
+        // Fallback: separate ProductMedia collection
+        const externalMedia = await ProductMedia.find({ product_id: obj._id }).sort({ sort_order: 1 });
+        mediaUrls = externalMedia.map(m => m.media_url);
+      }
+      obj.media = mediaUrls;
+
+      // --- Fix category ref: DB uses 'category' field, model expects 'category_id' ---
+      if (!obj.category_id && obj.category) {
+        obj.category_id = obj.category;
+      }
+
+      // --- Fix shop ref: DB uses 'shop' field, model expects 'shop_id' ---
+      if (!obj.shop_id && obj.shop) {
+        obj.shop_id = obj.shop;
+      }
+
+      return obj;
+    };
+
     const attachMedia = async (products) => {
-      return await Promise.all(products.map(async (p) => {
-        const media = await ProductMedia.find({ product_id: p._id }).sort({ sort_order: 1 });
-        return {
-          ...p.toObject(),
-          media: media.map(m => m.media_url)
-        };
-      }));
+      return await Promise.all(products.map(p => normalizeProduct(p)));
     };
 
     res.status(200).json({
@@ -77,8 +113,8 @@ exports.getProductDetail = async (req, res, next) => {
     const { slug } = req.params;
 
     // 1. Fetch Product
-    const product = await Product.findOne({ slug, approval_status: 'approved', is_active: true });
-    if (!product) {
+    const productRaw = await Product.findOne({ slug, approval_status: 'approved', is_active: true });
+    if (!productRaw) {
       return res.status(404).json({
         success: false,
         code: 404,
@@ -86,6 +122,21 @@ exports.getProductDetail = async (req, res, next) => {
         data: null,
         timestamp: Math.floor(Date.now() / 1000)
       });
+    }
+
+    // Normalize the product (fix prices, media, refs)
+    const product = productRaw.toObject();
+    if (!product.selling_price && product.base_price) {
+      product.selling_price = product.base_price;
+    }
+    if (!product.mrp_price) {
+      product.mrp_price = product.selling_price || product.base_price || 0;
+    }
+    if (!product.category_id && product.category) {
+      product.category_id = product.category;
+    }
+    if (!product.shop_id && product.shop) {
+      product.shop_id = product.shop;
     }
 
     // 2. Fetch Shop with more stats
@@ -104,11 +155,30 @@ exports.getProductDetail = async (req, res, next) => {
       if (breadcrumbs.length >= 3) break; // Limit to 3 levels as per spec
     }
 
-    // 4. Fetch Media
-    const media = await ProductMedia.find({ product_id: product._id }).sort({ sort_order: 1 });
+    // 4. Fetch Media — prefer embedded media[], fallback to ProductMedia collection
+    let media = [];
+    if (Array.isArray(product.media) && product.media.length > 0) {
+      if (typeof product.media[0] === 'string') {
+        media = product.media.map((url, index) => ({
+          media_url: url,
+          sort_order: index
+        }));
+      } else {
+        media = product.media
+          .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+      }
+    } else {
+      media = await ProductMedia.find({ product_id: product._id }).sort({ sort_order: 1 });
+    }
 
     // 5. Fetch Variants & Calculate Total Stock
-    const variants = await ProductVariant.find({ product_id: product._id });
+    // Try embedded variants first, then external collection
+    let variants = [];
+    if (Array.isArray(product.variants) && product.variants.length > 0) {
+      variants = product.variants;
+    } else {
+      variants = await ProductVariant.find({ product_id: product._id });
+    }
     const totalStock = variants.length > 0 
       ? variants.reduce((acc, v) => acc + (v.stock_quantity || 0), 0)
       : 100;
@@ -128,18 +198,37 @@ exports.getProductDetail = async (req, res, next) => {
       .sort({ createdAt: -1 });
 
     // 8. Fetch Related Products (Same category, approved, not current)
+    const catId = product.category_id || product.category;
     const relatedProductsRaw = await Product.find({ 
-      category_id: product.category_id, 
+      $or: [{ category_id: catId }, { category: catId }], 
       _id: { $ne: product._id },
       approval_status: 'approved'
     }).limit(4);
 
     const relatedProducts = await Promise.all(relatedProductsRaw.map(async (p) => {
-      const pMedia = await ProductMedia.find({ product_id: p._id }).sort({ sort_order: 1 }).limit(1);
-      const pCat = await Category.findById(p.category_id).select('name');
+      const obj = p.toObject();
+      // Normalize prices
+      if (!obj.selling_price && obj.base_price) obj.selling_price = obj.base_price;
+      if (!obj.mrp_price) obj.mrp_price = obj.selling_price || obj.base_price || 0;
+      // Normalize media
+      let pMediaUrls = [];
+      if (Array.isArray(obj.media) && obj.media.length > 0) {
+        if (typeof obj.media[0] === 'string') {
+          pMediaUrls = obj.media;
+        } else {
+          pMediaUrls = obj.media
+            .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
+            .map(m => m.media_url);
+        }
+      } else {
+        const pMedia = await ProductMedia.find({ product_id: p._id }).sort({ sort_order: 1 }).limit(1);
+        pMediaUrls = pMedia.map(m => m.media_url);
+      }
+      const pCatId = obj.category_id || obj.category;
+      const pCat = pCatId ? await Category.findById(pCatId).select('name') : null;
       return {
-        ...p.toObject(),
-        media: pMedia.map(m => m.media_url),
+        ...obj,
+        media: pMediaUrls,
         category: pCat
       };
     }));
@@ -210,6 +299,7 @@ exports.searchProducts = async (req, res, next) => {
       approval_status: 'approved',
       is_active: true
     };
+    const andFilters = [];
 
     // 1. Keyword Search
     if (q) {
@@ -225,15 +315,27 @@ exports.searchProducts = async (req, res, next) => {
         // For simplicity, let's just find products in this exact category or its children.
         const subCats = await Category.find({ parent_id: cat._id });
         const catIds = [cat._id, ...subCats.map(c => c._id)];
-        query.category_id = { $in: catIds };
+        andFilters.push({
+          $or: [
+            { category_id: { $in: catIds } },
+            { category: { $in: catIds } }
+          ]
+        });
       }
     }
 
-    // 3. Price Range
+    // 3. Price Range — support both selling_price and base_price fields
     if (minPrice || maxPrice) {
-      query.selling_price = {};
-      if (minPrice) query.selling_price.$gte = Number(minPrice);
-      if (maxPrice) query.selling_price.$lte = Number(maxPrice);
+      const priceFilter = {};
+      if (minPrice) priceFilter.$gte = Number(minPrice);
+      if (maxPrice) priceFilter.$lte = Number(maxPrice);
+      // Match products that have EITHER field name
+      andFilters.push({
+        $or: [
+          { selling_price: priceFilter },
+          { base_price: priceFilter }
+        ]
+      });
     }
 
     // 4. Rating
@@ -241,10 +343,14 @@ exports.searchProducts = async (req, res, next) => {
       query.average_rating = { $gte: Number(rating) };
     }
 
-    // 5. Sorting
+    if (andFilters.length > 0) {
+      query.$and = andFilters;
+    }
+
+    // 5. Sorting — use base_price as fallback sort field for price
     let sortOption = { createdAt: -1 }; // Default: Newest
-    if (sort === 'price_asc') sortOption = { selling_price: 1 };
-    else if (sort === 'price_desc') sortOption = { selling_price: -1 };
+    if (sort === 'price_asc') sortOption = { base_price: 1, selling_price: 1 };
+    else if (sort === 'price_desc') sortOption = { base_price: -1, selling_price: -1 };
     else if (sort === 'top_rated') sortOption = { average_rating: -1 };
     else if (sort === 'oldest') sortOption = { createdAt: 1 };
 
@@ -256,13 +362,36 @@ exports.searchProducts = async (req, res, next) => {
       .skip(skip)
       .limit(Number(limit));
 
-    // 7. Attach Media & Categories
+    // 7. Attach Media & Categories — handle both DB schemas
     const results = await Promise.all(products.map(async (p) => {
-      const media = await ProductMedia.find({ product_id: p._id }).sort({ sort_order: 1 }).limit(1);
-      const cat = await Category.findById(p.category_id).select('name slug');
+      const obj = p.toObject();
+
+      // Normalize prices
+      if (!obj.selling_price && obj.base_price) obj.selling_price = obj.base_price;
+      if (!obj.mrp_price) obj.mrp_price = obj.selling_price || obj.base_price || 0;
+
+      // Normalize media
+      let mediaUrls = [];
+      if (Array.isArray(obj.media) && obj.media.length > 0) {
+        if (typeof obj.media[0] === 'string') {
+          mediaUrls = obj.media;
+        } else {
+          mediaUrls = obj.media
+            .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
+            .map(m => m.media_url);
+        }
+      } else {
+        const externalMedia = await ProductMedia.find({ product_id: p._id }).sort({ sort_order: 1 }).limit(1);
+        mediaUrls = externalMedia.map(m => m.media_url);
+      }
+
+      // Normalize category ref
+      const catId = obj.category_id || obj.category;
+      const cat = catId ? await Category.findById(catId).select('name slug') : null;
+
       return {
-        ...p.toObject(),
-        media: media.map(m => m.media_url),
+        ...obj,
+        media: mediaUrls,
         category: cat
       };
     }));
